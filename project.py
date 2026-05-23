@@ -11,7 +11,7 @@ def connect_db():
     conn = mysql.connector.connect(
         host = "localhost",
         user='root',
-        password='', # add your own password here
+        password='Nooneisperfect&#1', # add your own password here
         database='ZotEvent',
         allow_local_infile=True
     )
@@ -195,7 +195,9 @@ def import_data(args, cursor):
         
 # insert administrator
 def insertAdmin(args, cursor):
-    
+    """
+    Insert a new user and administrator into the related tables.
+    """
     uid = args[0]
     email = args[1]
     username = args[2]
@@ -214,6 +216,43 @@ def insertAdmin(args, cursor):
     """, (uid,firstname,lastname))
     
     return True
+
+# add venue to event
+def addVenue(args, cursor):
+    """
+    Add a venue to an existing event by inserting it into the Hosting relationship.
+    The event and venue already exist.  If is_primary = true, the function should ensure this event has no other primary venue.
+    If another primary venue already exists, return False.
+    
+    If the same venue and event are added, the row will not be added as vid and eid are primary keys and should not be duplicated
+    """
+    eid = args[0]
+    vid = args[1]
+    is_primary = args[2].lower() == 'true'
+    
+    if is_primary:
+        # ensure that the event has no other primary venue
+        # the event should have only one primary venue
+        cursor.execute(""" 
+            SELECT COUNT(*) FROM Hosting
+            WHERE eid = %s AND is_primary = TRUE     
+        """, (eid,))
+        count = cursor.fetchone()[0]
+        if count > 0:
+            return False # the event already has primary venue, return false
+    
+    # if there is no primary venue in that eid, add the incoming venue and set it as primary venue
+    try:
+        # first try adding the row into hosting
+        # if the eid or vid doesn't exist in primary tables, return false
+        cursor.execute("""
+            INSERT INTO Hosting (eid, vid,is_primary)
+            VALUES(%s, %s, %s)
+        """, (eid, vid, is_primary))
+    except mysql.connector.Error:
+        return False
+    
+    return True
     
 def main():
     conn = connect_db()
@@ -226,12 +265,17 @@ def main():
         if command == 'import':
             result = import_data(args, cursor)
             print(result)
-            conn.commit()
+            conn.commit() # commit it so it saves in the database
         
         elif command == 'insertAdmin':
             result = insertAdmin(args, cursor)
             print(result)
-            conn.commit() # commit it so it saves in the database
+            conn.commit() 
+        
+        elif command == 'addVenue':
+            result = addVenue(args, cursor)
+            print(result)
+            conn.commit()
                 
     except mysql.connector.Error as err:
         conn.rollback()
