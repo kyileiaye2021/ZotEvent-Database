@@ -11,7 +11,7 @@ def connect_db():
     conn = mysql.connector.connect(
         host = "localhost",
         user='root',
-        password='Nooneisperfect&#1', # add your own password here
+        password='', # add your own password here
         database='ZotEvent',
         allow_local_infile=True
     )
