@@ -174,7 +174,7 @@ def create_tables(cursor):
     """)
 
 # import data
-def import_data(args):
+def import_data(args, cursor):
     """
     Delete existing tables, and create new tables.
     Then read the csv files in the given folder and import data into the database.
@@ -185,38 +185,61 @@ def import_data(args):
     
     folder_path = args[0]
     
+    drop_tables(cursor)
+    create_tables(cursor)
+    
+    for csv_file, table_name in CSV_TABLE_MAP.items():
+        csv_path = os.path.abspath(os.path.join(folder_path, csv_file))
+        load_csv(cursor, csv_path, table_name)
+    return True
+        
+# insert administrator
+def insertAdmin(args, cursor):
+    
+    uid = args[0]
+    email = args[1]
+    username = args[2]
+    joined = args[3]
+    firstname = args[4]
+    lastname = args[5]
+    
+    cursor.execute("""
+        INSERT INTO User (uid, email, username, joined)
+        VALUES (%s, %s, %s, %s)
+    """, (uid, email, username, joined))
+    
+    cursor.execute("""
+        INSERT INTO Administrator (uid, firstname, lastname)
+        VALUES(%s,%s,%s)
+    """, (uid,firstname,lastname))
+    
+    return True
+    
+def main():
     conn = connect_db()
     cursor = conn.cursor()
     
+    command = sys.argv[1]
+    args = sys.argv[2:]
+    
     try:
-        drop_tables(cursor)
-        create_tables(cursor)
-    
-        for csv_file, table_name in CSV_TABLE_MAP.items():
-            csv_path = os.path.abspath(os.path.join(folder_path, csv_file))
-            load_csv(cursor, csv_path, table_name)
-            # print(f"Loaded {csv_file} into {table_name}")
-            
-        conn.commit()
-        # print('Import completed successfully.')
-        return True
-    
+        if command == 'import':
+            result = import_data(args, cursor)
+            print(result)
+            conn.commit()
+        
+        elif command == 'insertAdmin':
+            result = insertAdmin(args, cursor)
+            print(result)
+            conn.commit() # commit it so it saves in the database
+                
     except mysql.connector.Error as err:
         conn.rollback()
-        # print(f"MySQL Error: {err}")
-        return False
+        print(f"MySQL Error: {err}")
         
     finally:
         cursor.close()
         conn.close()
         
-def main():
-    command = sys.argv[1]
-    args = sys.argv[2:]
-    
-    if command == 'import':
-        result = import_data(args)
-        print(result)
-    
 if __name__ == '__main__':
     main()    
