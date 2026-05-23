@@ -244,7 +244,7 @@ def addVenue(args, cursor):
     # if there is no primary venue in that eid, add the incoming venue and set it as primary venue
     try:
         # first try adding the row into hosting
-        # if the eid or vid doesn't exist in primary tables, return false
+        # if the eid or vid exist in primary tables, return false
         cursor.execute("""
             INSERT INTO Hosting (eid, vid,is_primary)
             VALUES(%s, %s, %s)
