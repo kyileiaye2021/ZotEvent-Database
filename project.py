@@ -9,11 +9,12 @@ import os
 
 def connect_db():
     conn = mysql.connector.connect(
-        host = "localhost",
+        host="localhost",
         user='root',
         password='', # add your own password here
         database='ZotEvent',
-        allow_local_infile=True
+        allow_local_infile=True,
+        use_pure=True #Scarlett adds one line here
     )
     return conn
 
@@ -253,7 +254,126 @@ def addVenue(args, cursor):
         return False
     
     return True
-    
+
+
+
+# Q4: reserve slot
+def reserveSlot(args, cursor):
+    """
+    Reserve a specific slot for a participant.
+    The event, slot, and participant already exist.
+    The slot must currently be unreserved.
+    """
+    eid = args[0]
+    snum = args[1]
+    uid = args[2]
+
+    try:
+        # First check whether this slot is currently unreserved
+        cursor.execute("""
+            SELECT is_reserved
+            FROM Slot
+            WHERE eid = %s AND snum = %s
+        """, (eid, snum))
+
+        row = cursor.fetchone()
+
+        # If the slot does not exist, fail
+        if row is None:
+            return False
+
+        # If the slot is already reserved, fail
+        if row[0] == 1 or row[0] is True:
+            return False
+
+        # Reserve the slot
+        cursor.execute("""
+            UPDATE Slot
+            SET is_reserved = TRUE, uid = %s
+            WHERE eid = %s AND snum = %s
+        """, (uid, eid, snum))
+
+        return cursor.rowcount == 1
+
+    except mysql.connector.Error:
+        return False
+
+
+# Q5: cancel reservation
+def cancelReservation(args, cursor):
+    """
+    Cancel a participant's reservation for a specific event slot.
+    Only cancel if the slot is currently reserved by the given participant.
+    """
+    eid = args[0]
+    snum = args[1]
+    uid = args[2]
+
+    try:
+        # First check whether this slot is reserved by this participant
+        cursor.execute("""
+            SELECT is_reserved, uid
+            FROM Slot
+            WHERE eid = %s AND snum = %s
+        """, (eid, snum))
+
+        row = cursor.fetchone()
+
+        # If the slot does not exist, fail
+        if row is None:
+            return False
+
+        is_reserved = row[0]
+        current_uid = row[1]
+
+        # Only cancel if the slot is reserved by this exact participant
+        if not (is_reserved == 1 or is_reserved is True):
+            return False
+
+        if str(current_uid) != str(uid):
+            return False
+
+        # Cancel the reservation
+        cursor.execute("""
+            UPDATE Slot
+            SET is_reserved = FALSE, uid = NULL
+            WHERE eid = %s AND snum = %s
+        """, (eid, snum))
+
+        return cursor.rowcount == 1
+
+    except mysql.connector.Error:
+        return False
+
+# Q6: update event
+def updateEvent(args, cursor):
+    """
+    Update the title and datetime of an event.
+    """
+    eid = args[0]
+    title = args[1]
+    event_datetime = args[2]
+
+    try:
+        cursor.execute("""
+            UPDATE Event
+            SET title = %s, datetime = %s
+            WHERE eid = %s
+        """, (title, event_datetime, eid))
+
+        return cursor.rowcount == 1
+
+    except mysql.connector.Error:
+        return False
+
+
+def print_bool(result):
+    if result:
+        print("Success")
+    else:
+        print("Fail")
+
+
 def main():
     conn = connect_db()
     cursor = conn.cursor()
@@ -276,6 +396,21 @@ def main():
             result = addVenue(args, cursor)
             print(result)
             conn.commit()
+        #Q4-6
+        elif command == 'reserveSlot':
+            result = reserveSlot(args, cursor)
+            conn.commit()
+            print_bool(result)
+
+        elif command == 'cancelReservation':
+            result = cancelReservation(args, cursor)
+            conn.commit()
+            print_bool(result)
+
+        elif command == 'updateEvent':
+            result = updateEvent(args, cursor)
+            conn.commit()
+            print_bool(result)
                 
     except mysql.connector.Error as err:
         conn.rollback()
