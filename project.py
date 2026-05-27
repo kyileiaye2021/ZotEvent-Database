@@ -366,6 +366,64 @@ def updateEvent(args, cursor):
     except mysql.connector.Error:
         return False
 
+# Q7: delete organizer
+def deleteOrganizer(args, cursor):
+    """
+    Delete an organizer from the database.
+    """
+    uid = args[0]
+
+    try:
+        cursor.execute("DELETE FROM Organizer WHERE uid = %s", (uid,))
+        return cursor.rowcount == 1
+    
+    except mysql.connector.Error:
+        return False
+    
+# Q8: upcoming events with available slots
+def availableEvents(args, cursor):
+    """
+    List all future events that still have at least one unreserved slot.
+    """
+    date = args[0]
+
+    cursor.execute("""
+        SELECT e.eid, e.title, e.type, e.datetime,
+               SUM(CASE WHEN s.is_reserved = FALSE THEN 1 ELSE 0 END) AS availableSlots
+        FROM Event e
+        JOIN Slot s ON e.eid = s.eid
+        WHERE e.datetime > %s
+        GROUP BY e.eid, e.title, e.type, e.datetime
+        HAVING availableSlots > 0
+        ORDER BY e.datetime ASC, e.eid ASC
+    """, (date,))
+
+    rows = cursor.fetchall()
+    for r in rows:
+        print(f"{r[0]},{r[1]},{r[2]},{r[3]},{int(r[4])}")
+    return True
+
+# Q9: popular event types
+def popularEventTypes(args, cursor):
+    """
+    For each event type, total number of reserved slots across all events of that type.
+    """
+    N = args[0]
+
+    cursor.execute("""
+        SELECT e.type,
+               COALESCE(SUM(CASE WHEN s.is_reserved = TRUE THEN 1 ELSE 0 END), 0) AS reservedCount
+        FROM Event e
+        LEFT JOIN Slot s ON e.eid = s.eid
+        GROUP BY e.type
+        HAVING reservedCount >= %s
+        ORDER BY reservedCount DESC, e.type ASC
+    """, (N,))
+    
+    rows = cursor.fetchall()
+    for r in rows:
+        print(f"{r[0]},{int(r[1])}")
+    return True
 
 def print_bool(result):
     if result:
@@ -411,6 +469,17 @@ def main():
             result = updateEvent(args, cursor)
             conn.commit()
             print_bool(result)
+
+        elif command == 'deleteOrganizer':
+            result = deleteOrganizer(args, cursor)
+            conn.commit()
+            print_bool(result)
+
+        elif command == 'availableEvents':
+            availableEvents(args, cursor)
+
+        elif command == 'popularEventTypes':
+            popularEventTypes(args, cursor)
                 
     except mysql.connector.Error as err:
         conn.rollback()
