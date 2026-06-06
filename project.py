@@ -10,9 +10,9 @@ import os
 def connect_db():
     conn = mysql.connector.connect(
         host="localhost",
-        user='root',
-        password='', # add your own password here
-        database='ZotEvent',
+        user='test', # the username in GradeScope
+        password='password', # the password in GradeScope
+        database='cs122a', # the database name in GradeScope
         allow_local_infile=True,
         use_pure=True #Scarlett adds one line here
     )
@@ -183,7 +183,7 @@ def import_data(args, cursor):
     Args:
         folder (str): the folder that contains csv files
     """
-    
+
     folder_path = args[0]
     
     drop_tables(cursor)
@@ -425,6 +425,73 @@ def popularEventTypes(args, cursor):
         print(f"{r[0]},{int(r[1])}")
     return True
 
+# Q10: participant schedule
+def participantSchedule(args, cursor):
+    """
+    List all events for which the participant has reserved a slot.
+    Include the slot number and primary venue information if available.
+    """
+    uid = args[0]
+
+    cursor.execute("""
+        SELECT e.eid, e.title, e.type, e.datetime, s.snum,
+               v.vid, v.street, v.city, v.state, v.zip
+        FROM Slot s
+        JOIN Event e ON s.eid = e.eid
+        LEFT JOIN Hosting h ON e.eid = h.eid AND h.is_primary = TRUE
+        LEFT JOIN Venue v ON h.vid = v.vid
+        WHERE s.uid = %s AND s.is_reserved = TRUE
+        ORDER BY e.datetime ASC
+    """, (uid,))
+
+    rows = cursor.fetchall()
+    for r in rows:
+        print(",".join("NULL" if value is None else str(value) for value in r))
+    return True
+
+# Q11: organizer event count
+def organizerStats(args, cursor):
+    """
+    List organizers who have created at least N events.
+    """
+    N = args[0]
+
+    cursor.execute("""
+        SELECT o.uid, u.username, o.department, COUNT(e.eid) AS eventCount
+        FROM Organizer o
+        JOIN User u ON o.uid = u.uid
+        JOIN Event e ON o.uid = e.creator_uid
+        GROUP BY o.uid, u.username, o.department
+        HAVING eventCount >= %s
+        ORDER BY eventCount DESC, o.uid ASC
+    """, (N,))
+
+    rows = cursor.fetchall()
+    for r in rows:
+        print(f"{r[0]},{r[1]},{r[2]},{int(r[3])}")
+    return True
+
+# Q12: venue event list
+def venueEvents(args, cursor):
+    """
+    Given a venue ID, list all events hosted at that venue.
+    Include whether the venue is primary for each event.
+    """
+    vid = args[0]
+
+    cursor.execute("""
+        SELECT e.eid, e.title, e.type, e.datetime, h.is_primary
+        FROM Hosting h
+        JOIN Event e ON h.eid = e.eid
+        WHERE h.vid = %s
+        ORDER BY e.datetime ASC, e.eid ASC
+    """, (vid,))
+
+    rows = cursor.fetchall()
+    for r in rows:
+        print(f"{r[0]},{r[1]},{r[2]},{r[3]},{int(r[4])}")
+    return True
+
 def print_bool(result):
     if result:
         print("Success")
@@ -440,6 +507,7 @@ def main():
     args = sys.argv[2:]
     
     try:
+        #Q1-3
         if command == 'import':
             result = import_data(args, cursor)
             print(result)
@@ -470,6 +538,7 @@ def main():
             conn.commit()
             print_bool(result)
 
+        #Q7-9
         elif command == 'deleteOrganizer':
             result = deleteOrganizer(args, cursor)
             conn.commit()
@@ -480,10 +549,19 @@ def main():
 
         elif command == 'popularEventTypes':
             popularEventTypes(args, cursor)
+
+        #Q10-12
+        elif command == 'participantSchedule':
+            participantSchedule(args, cursor)
+
+        elif command == 'organizerStats':
+            organizerStats(args, cursor)
+
+        elif command == 'venueEvents':
+            venueEvents(args, cursor)
                 
     except mysql.connector.Error as err:
-        conn.rollback()
-        print(f"MySQL Error: {err}")
+        print("Fail")
         
     finally:
         cursor.close()
